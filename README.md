@@ -17,11 +17,11 @@ Human Intent → AI Agents → Software
 </p>
 
 <p align="center">
-<a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
-<a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/typescript-5.x-blue.svg" alt="TypeScript"></a>
-<a href="https://tauri.app/"><img src="https://img.shields.io/badge/tauri-2.x-blue.svg" alt="Tauri"></a>
-<a href="#"><img src="https://img.shields.io/badge/monorepo-turborepo-orange.svg" alt="Monorepo"></a>
-<a href="#"><img src="https://img.shields.io/badge/ai-agent-framework-purple.svg" alt="AI Agent Framework"></a>
+<a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+<img src="https://img.shields.io/badge/typescript-5.x-blue.svg" alt="TypeScript">
+<img src="https://img.shields.io/badge/tauri-2.x-blue.svg" alt="Tauri">
+<img src="https://img.shields.io/badge/turborepo-monorepo-orange.svg" alt="Turborepo">
+<img src="https://img.shields.io/badge/status-early%20development-yellow.svg" alt="Status">
 </p>
 
 <p align="center">

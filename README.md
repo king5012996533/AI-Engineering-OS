@@ -9,7 +9,7 @@ One Developer. Infinite AI Team.
 </h3>
 
 <p align="center">
-A protocol-driven operating system for autonomous software engineering.
+An open-source protocol-driven operating system for autonomous software engineering.
 </p>
 
 <p align="center">

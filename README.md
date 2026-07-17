@@ -89,39 +89,9 @@ Instead of treating AI as a chatbot, AI Engineering OS treats AI as a software e
 
 # Architecture
 
-```
-                     HUMAN INTENT
-                          |
-                          ↓
-
-                ┌──────────────────┐
-                │  Protocol Core   │
-                │  Kernel Contract │
-                └──────────────────┘
-
-    ┌──────────────┬──────────────┬──────────────┐
-    ↓              ↓              ↓
-Planner Agent  Developer Agent  Reviewer Agent
-    ↓              ↓              ↓
-
-          Tool Runtime Layer
-
-                   ↓
-
-          Sandbox Workspace
-
-                   ↓
-
-          Artifact Pipeline
-
-                   ↓
-
-          Human Approval
-
-                   ↓
-
-             Software Output
-```
+<p align="center">
+<img src="./docs/assets/architecture.png" alt="AI Engineering OS Architecture" width="800">
+</p>
 
 ---
 

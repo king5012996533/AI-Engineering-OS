@@ -17,7 +17,15 @@ Human Intent → AI Agents → Software
 </p>
 
 <p align="center">
-🚧 Early Development — The architecture and protocol layer are under active development.
+<a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+<a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/typescript-5.x-blue.svg" alt="TypeScript"></a>
+<a href="https://tauri.app/"><img src="https://img.shields.io/badge/tauri-2.x-blue.svg" alt="Tauri"></a>
+<a href="#"><img src="https://img.shields.io/badge/monorepo-turborepo-orange.svg" alt="Monorepo"></a>
+<a href="#"><img src="https://img.shields.io/badge/ai-agent-framework-purple.svg" alt="AI Agent Framework"></a>
+</p>
+
+<p align="center">
+🚧 Early Development — The protocol layer is being built as the foundation for next-generation AI software engineering.
 </p>
 
 ---
@@ -117,7 +125,7 @@ Planner Agent  Developer Agent  Reviewer Agent
 
 ---
 
-# Core Philosophy
+# Core Architecture
 
 ## 1. Protocol First
 

@@ -17,7 +17,7 @@ Human Intent → AI Agents → Software
 </p>
 
 <p align="center">
-🚧 Early Development
+🚧 Early Development — The architecture and protocol layer are under active development.
 </p>
 
 ---

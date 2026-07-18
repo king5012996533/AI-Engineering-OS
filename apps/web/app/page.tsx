@@ -371,6 +371,7 @@ export default function CommandCenterPage() {
             <span>06</span>
             <h3>Runtime Events</h3>
           </div>
+          <p className="event-source">Source: Event Log projection</p>
           <div className="event-list">
             {visibleEvents.length === 0 ? (
               <p className="muted">No events yet.</p>

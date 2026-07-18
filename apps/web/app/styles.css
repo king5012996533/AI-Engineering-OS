@@ -305,6 +305,12 @@ dd {
   overflow: auto;
 }
 
+.event-source {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
 .event-row {
   align-items: center;
   background: #f7f2ea;

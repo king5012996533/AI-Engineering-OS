@@ -1,4 +1,6 @@
 export * from "./runtime-manager.js";
+export * from "./runtime-provider-registry.js";
+export * from "./event-log-service.js";
 export * from "./runtimes/mock-runtime.js";
 export * from "./project-memory-service.js";
 export * from "./git-sandbox-service.js";

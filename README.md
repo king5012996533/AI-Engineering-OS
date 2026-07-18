@@ -311,6 +311,10 @@ Runtime providers are replaceable execution engines. Every provider must declare
 
 Providers produce events and artifacts. They do not own approval, apply, memory, or policy logic.
 
+The provider registry is the only place where runtime providers are registered. Task services ask the registry for a runtime; they do not construct providers directly.
+
+The event log is the source of truth for runtime events. UI state is a projection over persisted events, not a separate authority.
+
 ---
 
 # Project Structure

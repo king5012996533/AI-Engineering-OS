@@ -5,7 +5,6 @@ import type {
   ApprovalRequest,
   ApplyAuditRecord,
   ProjectMemory,
-  RuntimeCapabilities,
   RunRecord,
   RuntimeDiffArtifact,
   RuntimeEvent,
@@ -14,6 +13,7 @@ import type {
 } from "@aieos/protocol";
 import { evaluateApprovalPolicy } from "./approval-policy-service.js";
 import { applyPatchArtifact } from "./apply-engine.js";
+import { appendEventLog, listEventLog, seedEventLog } from "./event-log-service.js";
 import { createGitSandboxPatch } from "./git-sandbox-service.js";
 import {
   getProjectMemory,
@@ -22,8 +22,7 @@ import {
   rememberDecision,
   rememberTask,
 } from "./project-memory-service.js";
-import { RuntimeManager } from "./runtime-manager.js";
-import { MockRuntime } from "./runtimes/mock-runtime.js";
+import { getRuntimeManager } from "./runtime-provider-registry.js";
 
 export type CommandTaskStatus =
   | "queued"
@@ -63,8 +62,7 @@ type CreateTaskInput = {
   workspacePath?: string;
 };
 
-const manager = new RuntimeManager();
-manager.register(new MockRuntime());
+const manager = getRuntimeManager();
 
 const tasks = new Map<string, CommandTask>();
 const events = new Map<string, RuntimeEvent[]>();
@@ -83,10 +81,6 @@ type PersistedState = {
   runs: RunRecord[];
   applyAudits: ApplyAuditRecord[];
 };
-
-export function listRuntimeProviders(): RuntimeCapabilities[] {
-  return manager.listCapabilities();
-}
 
 export async function createCommandTask(input: CreateTaskInput): Promise<CommandTask> {
   hydrate();
@@ -135,7 +129,7 @@ export function getCommandTask(taskId: string): CommandTaskSnapshot | null {
 
   return {
     ...task,
-    events: events.get(task.id) ?? [],
+    events: listEventLog({ taskId: task.id }),
     artifact: task.artifactId ? artifacts.get(task.artifactId) : undefined,
     approval: task.approvalId ? approvals.get(task.approvalId) : undefined,
     run: task.runId ? runs.get(task.runId) : undefined,
@@ -567,6 +561,7 @@ function updateTask(taskId: string, patch: Partial<CommandTask>): void {
 }
 
 function appendEvent(taskId: string, event: RuntimeEvent): void {
+  appendEventLog(event);
   const taskEvents = events.get(taskId) ?? [];
   taskEvents.push(event);
   events.set(taskId, taskEvents);
@@ -597,6 +592,7 @@ function hydrate(): void {
   }
   for (const [taskId, taskEvents] of state.events ?? []) {
     events.set(taskId, taskEvents);
+    seedEventLog(taskEvents);
   }
   for (const artifact of state.artifacts ?? []) {
     artifacts.set(artifact.id, artifact);

@@ -23,6 +23,10 @@ type TaskSnapshot = {
   artifact?: {
     id: string;
     label: string;
+    source?: string;
+    risk?: "low" | "medium" | "high";
+    lifecycleState?: string;
+    approvalState?: string;
     data: {
       patch: string;
       status: string;
@@ -33,6 +37,10 @@ type TaskSnapshot = {
   approval?: {
     id: string;
     summary: string;
+    policyId?: string;
+    riskLevel?: "low" | "medium" | "high";
+    requiresHuman?: boolean;
+    reason?: string;
     decision?: string;
   };
   projectMemory?: {
@@ -280,19 +288,31 @@ export default function CommandCenterPage() {
             <span>06</span>
             <h3>Artifact / Diff</h3>
           </div>
+          <div className="artifact-meta">
+            <span>Lifecycle: {task?.artifact?.lifecycleState ?? "waiting"}</span>
+            <span>Approval: {task?.artifact?.approvalState ?? "waiting"}</span>
+            <span>Risk: {task?.artifact?.risk ?? "unknown"}</span>
+            <span>Source: {task?.artifact?.source ?? "runtime"}</span>
+          </div>
           <pre>{task?.artifact?.data.patch || "Patch artifact will appear here."}</pre>
           <div className="approval-bar">
-            <p>{task?.approval?.summary ?? "No approval request yet."}</p>
+            <p>
+              {task?.approval?.summary ?? "No approval request yet."}
+              {task?.approval?.reason ? ` Policy: ${task.approval.reason}` : ""}
+            </p>
             <div>
-              <button disabled={!task?.approvalId || Boolean(task?.approval?.decision)} onClick={() => decide("rejected")}>
+              <button
+                disabled={!task?.approvalId || Boolean(task?.approval?.decision) || task?.approval?.requiresHuman === false}
+                onClick={() => decide("rejected")}
+              >
                 Reject
               </button>
               <button
                 className="primary"
-                disabled={!task?.approvalId || Boolean(task?.approval?.decision)}
+                disabled={!task?.approvalId || Boolean(task?.approval?.decision) || task?.approval?.requiresHuman === false}
                 onClick={() => decide("approved")}
               >
-                Approve
+                {task?.approval?.requiresHuman === false ? "Auto Approved" : "Approve"}
               </button>
             </div>
           </div>

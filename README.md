@@ -76,6 +76,8 @@ AI Engineering OS is not an AI coding assistant.
 
 It is an operating system for coordinating autonomous software engineering workflows.
 
+The code generator is replaceable. The engineering workflow is the product.
+
 It provides:
 
 - Agent orchestration

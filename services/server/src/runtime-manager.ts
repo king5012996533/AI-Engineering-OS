@@ -148,6 +148,9 @@ async function safeExtractDiff(
       taskId: task.task.id,
       agentId: runtime.id,
       label: "Runtime failed before diff extraction",
+      source: runtime.id,
+      lifecycleState: "created",
+      approvalState: "not_required",
       data: {
         patch: "",
         status: "failed",

@@ -9,6 +9,7 @@ import type {
   TaskNode,
   ToolCallTask,
 } from "@aieos/protocol";
+import { evaluateApprovalPolicy } from "./approval-policy-service.js";
 import { createGitSandboxPatch } from "./git-sandbox-service.js";
 import { getProjectMemory, rememberArtifact, rememberDecision, rememberTask } from "./project-memory-service.js";
 import { RuntimeManager } from "./runtime-manager.js";
@@ -133,6 +134,7 @@ export function decideApproval(
     task.status = decision === "approved" ? "approved" : "rejected";
     task.updatedAt = Date.now();
     tasks.set(task.id, task);
+    transitionArtifact(approval.artifactId, decision);
     appendEvent(task.id, {
       id: id("evt"),
       runtimeId: task.runtimeId,
@@ -193,14 +195,21 @@ async function runTask(commandTask: CommandTask, workspacePath?: string): Promis
   }
 
   const artifact = buildArtifact(commandTask, result.artifact);
-  artifacts.set(artifact.id, artifact);
-  rememberArtifact(commandTask.workspacePath, artifact.id);
+  const policy = evaluateApprovalPolicy(artifact);
+  const governedArtifact: RuntimeDiffArtifact = {
+    ...artifact,
+    risk: policy.riskLevel,
+    lifecycleState: policy.requiresHuman ? "review_required" : "approved",
+    approvalState: policy.requiresHuman ? "pending" : "approved",
+  };
+  artifacts.set(governedArtifact.id, governedArtifact);
+  rememberArtifact(commandTask.workspacePath, governedArtifact.id);
   persist();
 
   if (result.status === "failed") {
     updateTask(commandTask.id, {
       status: "failed",
-      artifactId: artifact.id,
+      artifactId: governedArtifact.id,
       error: result.error,
     });
     return;
@@ -209,16 +218,25 @@ async function runTask(commandTask: CommandTask, workspacePath?: string): Promis
   const approval: ApprovalRequest = {
     id: id("approval"),
     taskId: commandTask.id,
-    artifactId: artifact.id,
-    summary: "Runtime produced a patch artifact. Human approval is required before apply.",
-    diff: artifact.data.patch,
+    artifactId: governedArtifact.id,
+    summary: policy.requiresHuman
+      ? "Runtime produced a patch artifact. Human approval is required before apply."
+      : "Approval policy auto-approved this low-risk artifact.",
+    policyId: policy.id,
+    riskLevel: policy.riskLevel,
+    requiresHuman: policy.requiresHuman,
+    reason: policy.reason,
+    diff: governedArtifact.data.patch,
     requestedAt: Date.now(),
+    decision: policy.requiresHuman ? undefined : "approved",
+    decidedBy: policy.requiresHuman ? undefined : "policy",
+    decidedAt: policy.requiresHuman ? undefined : Date.now(),
   };
   approvals.set(approval.id, approval);
 
   updateTask(commandTask.id, {
-    status: "awaiting_approval",
-    artifactId: artifact.id,
+    status: policy.requiresHuman ? "awaiting_approval" : "approved",
+    artifactId: governedArtifact.id,
     approvalId: approval.id,
     error: result.error,
   });
@@ -232,8 +250,12 @@ async function runTask(commandTask: CommandTask, workspacePath?: string): Promis
     taskId: commandTask.id,
     payload: {
       approvalId: approval.id,
-      artifactId: artifact.id,
+      artifactId: governedArtifact.id,
       status: result.status,
+      policyId: policy.id,
+      riskLevel: policy.riskLevel,
+      requiresHuman: policy.requiresHuman,
+      reason: policy.reason,
     },
   });
 }
@@ -278,6 +300,9 @@ function buildArtifact(commandTask: CommandTask, fallback: RuntimeDiffArtifact):
     ...fallback,
     id: id("art"),
     label: "Git sandbox patch proposal",
+    source: "git-sandbox",
+    lifecycleState: "created",
+    approvalState: "not_required",
     data: {
       patch: sandbox.diff,
       status: "proposed",
@@ -285,6 +310,22 @@ function buildArtifact(commandTask: CommandTask, fallback: RuntimeDiffArtifact):
       notes: `Generated in isolated worktree: ${sandbox.sandboxPath}`,
     },
   };
+}
+
+function transitionArtifact(
+  artifactId: string,
+  decision: "approved" | "rejected" | "changes_requested",
+): void {
+  const artifact = artifacts.get(artifactId);
+  if (!artifact) {
+    return;
+  }
+
+  artifacts.set(artifactId, {
+    ...artifact,
+    lifecycleState: decision === "approved" ? "approved" : "rejected",
+    approvalState: decision,
+  });
 }
 
 function updateTask(taskId: string, patch: Partial<CommandTask>): void {

@@ -2,6 +2,7 @@
 // Approval Protocol: human-in-the-loop decisions.
 
 import { z } from "zod";
+import { RiskLevel } from "./policy.js";
 
 export const Decision = z.enum(["approved", "rejected", "changes_requested"]);
 export type Decision = z.infer<typeof Decision>;
@@ -11,6 +12,10 @@ export const ApprovalRequest = z.object({
   taskId: z.string(),
   artifactId: z.string(),
   summary: z.string(),
+  policyId: z.string().optional(),
+  riskLevel: RiskLevel.optional(),
+  requiresHuman: z.boolean().optional(),
+  reason: z.string().optional(),
   diff: z.string().optional(),
   requestedAt: z.number(),
   decidedBy: z.string().optional(),

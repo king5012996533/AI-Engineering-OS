@@ -60,6 +60,10 @@ export const RuntimeDiffStatus = z.enum(["empty", "proposed", "partial", "failed
 export type RuntimeDiffStatus = z.infer<typeof RuntimeDiffStatus>;
 
 export type RuntimeDiffArtifact = Artifact & {
+  source?: string;
+  risk?: RuntimeDiffRisk;
+  lifecycleState?: RuntimeDiffLifecycleState;
+  approvalState?: RuntimeDiffApprovalState;
   data: {
     patch: string;
     status: RuntimeDiffStatus;
@@ -67,6 +71,10 @@ export type RuntimeDiffArtifact = Artifact & {
     notes?: string;
   };
 };
+
+export type RuntimeDiffRisk = "low" | "medium" | "high";
+export type RuntimeDiffLifecycleState = "created" | "review_required" | "approved" | "rejected" | "applied" | "archived";
+export type RuntimeDiffApprovalState = "not_required" | "pending" | "approved" | "rejected" | "changes_requested";
 
 export type AgentRuntime = {
   id: RuntimeId;

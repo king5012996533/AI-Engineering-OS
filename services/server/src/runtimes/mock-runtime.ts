@@ -95,6 +95,9 @@ export class MockRuntime implements AgentRuntime {
       taskId: this.task.task.id,
       agentId: "developer.mock",
       label: "Mock patch proposal",
+      source: "mock-runtime",
+      lifecycleState: "created",
+      approvalState: "not_required",
       data: {
         patch: this.patch,
         status: this.patch ? "proposed" : "empty",

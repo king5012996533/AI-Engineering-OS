@@ -295,6 +295,23 @@ dd {
   grid-column: 1 / -1;
 }
 
+.artifact-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.artifact-meta span {
+  background: #f7f2ea;
+  border: 1px solid #eee4d7;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 10px;
+}
+
 pre {
   background: var(--code);
   border-radius: 8px;

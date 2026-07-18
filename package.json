@@ -1,0 +1,19 @@
+{
+  "name": "ai-engineer-os",
+  "private": true,
+  "packageManager": "pnpm@11.0.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "turbo": "^2",
+    "prettier": "^3",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -23,6 +23,12 @@ AI Engineering OS
   -> Agent Runtime Interface
   -> Grok Build Bridge
   -> Grok Build Runtime
+
+Grok Build tool calls
+  -> Grok Build Bridge
+  -> OS Tool Execution Layer
+  -> audited tool result
+  -> Grok Build Bridge
 ```
 
 ## Capabilities Found
@@ -160,7 +166,7 @@ If Grok writes files directly during execution, the bridge must run it inside an
 Mitigation:
 
 - Always run in an OS-managed worktree.
-- Capture `git diff --binary` after execution.
+- Capture `git diff --unified=3` after execution.
 - Convert diff into `Artifact`.
 - Require approval before applying to the main workspace.
 
@@ -183,6 +189,19 @@ Mitigation:
 - Use Grok Build as runtime only.
 - Keep OS session, memory, approval, and artifact state independent.
 - Do not import Grok UI state into OS state.
+
+### Risk 4: Runtime Crash, Timeout, or OOM
+
+Grok Build may crash, exceed the runtime timeout, or be killed by the host while it has already produced partial work.
+
+Mitigation:
+
+- Run each turn with a hard timeout.
+- Terminate the runtime process on timeout.
+- Extract the current `git diff --unified=3` from the isolated worktree before cleanup.
+- Mark the extracted artifact as `partial`.
+- Preserve runtime events emitted before the crash.
+- Never discard partial code blindly; partial artifacts can still be reviewed, salvaged, or rejected.
 
 ## Recommended First Bridge
 
@@ -219,6 +238,24 @@ AI Engineering OS MUST:
 - Preserve unknown provider events as raw payloads without depending on them.
 - Keep runtime-specific session IDs as metadata, not primary OS IDs.
 
+### Tool Execution Layer Boundary
+
+Grok Build may have its own built-in file, terminal, and git tools. AI Engineering OS must still own tool arbitration.
+
+The target bridge flow is:
+
+```text
+Grok Build Runtime
+  -> Bridge receives or normalizes tool request
+  -> OS Tool Execution Layer checks policy
+  -> OS Tool Execution Layer records audit log
+  -> OS Tool Execution Layer executes inside worktree or sandbox
+  -> Tool result returns to Bridge
+  -> Bridge emits normalized RuntimeEvent
+```
+
+If a runtime can only execute tools internally, the bridge must compensate by running it in an OS-managed isolated worktree, capturing `git diff --unified=3`, and mapping every observable operation into runtime events. This is acceptable for MVP but not the final security model.
+
 If a future contributor wants to "just call Grok directly", the answer is no. The runtime can execute work, but AI Engineering OS owns the workflow contract.
 
 ### Adapter Contract
@@ -226,8 +263,14 @@ If a future contributor wants to "just call Grok directly", the answer is no. Th
 ```ts
 export interface AgentRuntime {
   id: string;
-  execute(input: AgentTask): Promise<AgentResult>;
-  stream(input: AgentTask, callback: EventCallback): Promise<void>;
+  /** Initialize runtime environment: worktree, sandbox profile, trace context. */
+  initialize(context: RuntimeContext): Promise<void>;
+  /** Execute one tool-calling turn and stream normalized runtime events. */
+  executeTurn(task: ToolCallTask): AsyncIterable<RuntimeEvent>;
+  /** Extract the current proposed or partial diff as an artifact. */
+  extractDiff(): Promise<Artifact>;
+  /** Cleanup runtime process, handles, and temporary workspace state. */
+  teardown(): Promise<void>;
 }
 ```
 
@@ -238,8 +281,9 @@ User Goal
   -> Planner creates TaskGraph
   -> Developer Task selected
   -> Grok Build Bridge starts headless run
-  -> streaming-json events mapped to TaskEvent
-  -> git diff captured as Artifact
+  -> tool requests mediated by OS Tool Execution Layer
+  -> streaming-json events mapped to RuntimeEvent / TaskEvent
+  -> git diff --unified=3 captured as Artifact
   -> ApprovalRequest created
   -> Human approves/rejects
 ```

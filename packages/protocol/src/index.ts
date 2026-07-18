@@ -4,3 +4,4 @@ export * from "./event.js";
 export * from "./artifact.js";
 export * from "./approval.js";
 export * from "./runtime.js";
+export * from "./tool.js";

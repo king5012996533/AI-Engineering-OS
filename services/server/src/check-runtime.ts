@@ -1,4 +1,4 @@
-import type { RuntimeTask, TaskNode } from "@aieos/protocol";
+import type { RuntimeContext, TaskNode, ToolCallTask } from "@aieos/protocol";
 import { RuntimeManager } from "./runtime-manager.js";
 import { MockRuntime } from "./runtimes/mock-runtime.js";
 
@@ -13,18 +13,37 @@ const task: TaskNode = {
   updatedAt: now,
 };
 
-const input: RuntimeTask = {
+const context: RuntimeContext = {
+  traceId: "trace_runtime_check",
+  workspacePath: process.cwd(),
+  sandboxProfile: "workspace",
+};
+
+const toolCallTask: ToolCallTask = {
   task,
   goal: "Prove Task -> Runtime -> Event -> Artifact flow",
-  workspacePath: process.cwd(),
-  traceId: "trace_runtime_check",
+  instructions: "Propose a minimal README patch and emit runtime/tool events.",
 };
 
 const manager = new RuntimeManager();
 manager.register(new MockRuntime());
 
-const result = await manager.stream("mock-runtime", input, (event) => {
-  console.log(JSON.stringify(event));
+const result = await manager.executeTurn("mock-runtime", context, toolCallTask, {
+  timeoutMs: 10_000,
 });
 
-console.log(JSON.stringify({ status: result.status, artifacts: result.artifacts.length }, null, 2));
+for (const event of result.events) {
+  console.log(JSON.stringify(event));
+}
+
+console.log(
+  JSON.stringify(
+    {
+      status: result.status,
+      artifactStatus: result.artifact.data.status,
+      patchLines: result.artifact.data.patch.split("\n").length,
+    },
+    null,
+    2,
+  ),
+);

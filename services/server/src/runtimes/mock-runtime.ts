@@ -1,84 +1,128 @@
-import type { AgentRuntime, Artifact, RuntimeResult, RuntimeTask, SystemEvent } from "@aieos/protocol";
+import type {
+  AgentRuntime,
+  RuntimeContext,
+  RuntimeDiffArtifact,
+  RuntimeEvent,
+  RuntimeKind,
+  ToolCallTask,
+} from "@aieos/protocol";
 
 const now = () => Date.now();
 const id = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 
 export class MockRuntime implements AgentRuntime {
   readonly id = "mock-runtime";
-  readonly kind = "mock";
+  readonly kind: RuntimeKind = "mock";
 
-  async execute(input: RuntimeTask): Promise<RuntimeResult> {
-    const events: SystemEvent[] = [];
-    return this.stream(input, async (event) => {
-      events.push(event);
-    }).then((result) => ({ ...result, events }));
+  private context: RuntimeContext | null = null;
+  private task: ToolCallTask | null = null;
+  private patch = "";
+
+  async initialize(context: RuntimeContext): Promise<void> {
+    this.context = context;
+    this.patch = "";
   }
 
-  async stream(input: RuntimeTask, callback: (event: SystemEvent) => void | Promise<void>): Promise<RuntimeResult> {
-    const events: SystemEvent[] = [];
-    const emit = async (type: string, payload?: unknown) => {
-      const event: SystemEvent = {
-        id: id("evt"),
-        type,
-        source: "agent",
-        timestamp: now(),
-        traceId: input.traceId,
-        payload,
-      };
-      events.push(event);
-      await callback(event);
-    };
+  async *executeTurn(task: ToolCallTask): AsyncIterable<RuntimeEvent> {
+    if (!this.context) {
+      throw new Error("Runtime must be initialized before executeTurn.");
+    }
 
-    await emit("runtime.started", {
-      runtimeId: this.id,
-      taskId: input.task.id,
-      workspacePath: input.workspacePath,
+    this.task = task;
+
+    yield this.event("runtime.initialized", {
+      workspacePath: this.context.workspacePath,
+      sandboxProfile: this.context.sandboxProfile,
     });
 
-    await emit("runtime.text", {
-      text: `Mock runtime received task: ${input.task.description}`,
+    yield this.event("runtime.turn.started", {
+      taskId: task.task.id,
+      instructions: task.instructions,
     });
 
-    const patch = [
+    yield this.event("runtime.thought", {
+      text: "Plan a minimal code change and request a file edit through the OS tool layer.",
+    });
+
+    yield this.event("runtime.tool.requested", {
+      tool: "file.patch",
+      reason: "Mock runtime proposes a README patch instead of mutating the main workspace.",
+      input: {
+        path: "README.md",
+      },
+    });
+
+    yield this.event("runtime.tool.approved", {
+      tool: "file.patch",
+      policy: "mock auto-approval for local smoke test",
+    });
+
+    this.patch = [
       "diff --git a/README.md b/README.md",
       "--- a/README.md",
       "+++ b/README.md",
       "@@ -1,3 +1,5 @@",
       " # AI Engineering OS",
       "+",
-      `+Mock runtime planned task: ${input.task.description}`,
+      `+Mock runtime planned task: ${task.task.description}`,
     ].join("\n");
 
-    const artifact: Artifact = {
+    yield this.event("runtime.tool.completed", {
+      tool: "file.patch",
+      output: {
+        patchLines: this.patch.split("\n").length,
+      },
+    });
+
+    yield this.event("runtime.diff.extracted", {
+      status: "proposed",
+      diffCommand: "git diff --unified=3",
+    });
+
+    yield this.event("runtime.turn.completed", {
+      taskId: task.task.id,
+    });
+  }
+
+  async extractDiff(): Promise<RuntimeDiffArtifact> {
+    if (!this.task) {
+      throw new Error("Cannot extract diff before executeTurn.");
+    }
+
+    return {
       id: id("art"),
       type: "patch",
-      taskId: input.task.id,
+      taskId: this.task.task.id,
       agentId: "developer.mock",
       label: "Mock patch proposal",
-      data: { patch },
+      data: {
+        patch: this.patch,
+        status: this.patch ? "proposed" : "empty",
+        diffCommand: "git diff --unified=3",
+      },
       version: 1,
       createdAt: now(),
     };
+  }
 
-    await emit("artifact.created", {
-      artifactId: artifact.id,
-      artifactType: artifact.type,
-      label: artifact.label,
-    });
+  async teardown(): Promise<void> {
+    this.context = null;
+    this.task = null;
+  }
 
-    await emit("runtime.completed", {
-      runtimeId: this.id,
-      taskId: input.task.id,
-      artifactId: artifact.id,
-    });
+  private event(type: RuntimeEvent["type"], payload?: unknown): RuntimeEvent {
+    if (!this.context) {
+      throw new Error("Runtime context is missing.");
+    }
 
     return {
+      id: id("evt"),
       runtimeId: this.id,
-      taskId: input.task.id,
-      status: "completed",
-      summary: "Mock runtime completed and produced a patch artifact.",
-      artifacts: [artifact],
-      events,
+      type,
+      timestamp: now(),
+      traceId: this.context.traceId,
+      taskId: this.task?.task.id,
+      payload,
     };
   }
 }

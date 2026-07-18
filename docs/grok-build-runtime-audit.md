@@ -195,6 +195,32 @@ services/server/src/runtimes/grok-build-bridge/
   index.ts
 ```
 
+## Integration Constraints
+
+These constraints are architectural boundaries. Runtime integrations must obey them even when a vendor runtime offers shortcuts.
+
+Grok Build MUST NOT:
+
+- Bypass the AI Engineering OS artifact lifecycle.
+- Directly mutate the main workspace.
+- Own approval or merge decisions.
+- Persist provider-specific state as canonical OS state.
+- Replace the AI Engineering OS task graph.
+- Emit UI-facing events without passing through the bridge mapper.
+- Apply patches without an `ApprovalRequest`.
+- Read secrets unless the workspace policy explicitly allows it.
+
+AI Engineering OS MUST:
+
+- Run runtime engines in an isolated workspace or worktree.
+- Convert runtime output into `Artifact` records.
+- Convert runtime progress into `SystemEvent` / `TaskEvent` records.
+- Treat provider events as untrusted external input.
+- Preserve unknown provider events as raw payloads without depending on them.
+- Keep runtime-specific session IDs as metadata, not primary OS IDs.
+
+If a future contributor wants to "just call Grok directly", the answer is no. The runtime can execute work, but AI Engineering OS owns the workflow contract.
+
 ### Adapter Contract
 
 ```ts

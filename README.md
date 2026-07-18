@@ -82,10 +82,12 @@ It provides:
 
 - Agent orchestration
 - Task planning
+- Run model
 - Tool execution
 - Project memory
 - Sandbox isolation
 - Artifact lifecycle management
+- Apply engine
 - Human approval workflows
 - Multi-model runtime support
 
@@ -257,6 +259,12 @@ AI generated outputs are treated as first-class engineering artifacts.
 
 ```
 Draft → Proposed → Reviewed → Approved → Applied → Archived
+```
+
+The v0.2.5 loop is:
+
+```
+Task -> Run -> Sandbox -> Artifact -> Approval -> Apply -> Memory Update
 ```
 
 Every artifact maintains:

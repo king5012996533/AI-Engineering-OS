@@ -54,6 +54,20 @@ export function rememberArtifact(workspacePath: string | undefined, artifactId: 
   });
 }
 
+export function rememberAppliedArtifact(
+  workspacePath: string | undefined,
+  artifactId: string,
+  taskId: string,
+): ProjectMemory {
+  const project = getProjectMemory(workspacePath);
+  return saveProjectMemory({
+    ...project,
+    artifactIds: unique([artifactId, ...project.artifactIds]).slice(0, 100),
+    history: [`Applied artifact ${artifactId} from task ${taskId}`, ...project.history].slice(0, 100),
+    updatedAt: Date.now(),
+  });
+}
+
 export function rememberDecision(
   workspacePath: string | undefined,
   input: Omit<ProjectDecision, "id" | "createdAt">,
@@ -117,4 +131,3 @@ function lastPathSegment(path: string): string {
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
 }
-

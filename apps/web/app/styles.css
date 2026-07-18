@@ -187,12 +187,19 @@ button:disabled {
   margin: 0;
 }
 
-.workspace div {
+.workspace div,
+.run-model div {
   border-bottom: 1px solid #eee4d7;
   display: grid;
   gap: 8px;
   grid-template-columns: 110px 1fr;
   padding-bottom: 12px;
+}
+
+.run-model dl {
+  display: grid;
+  gap: 12px;
+  margin: 0;
 }
 
 dt {

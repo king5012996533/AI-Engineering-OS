@@ -41,6 +41,12 @@ export const RuntimeEventType = z.enum([
   "runtime.turn.failed",
   "runtime.partial",
   "runtime.teardown",
+  "run.created",
+  "run.completed",
+  "artifact.review_required",
+  "artifact.approved",
+  "artifact.applied",
+  "artifact.archived",
 ]);
 export type RuntimeEventType = z.infer<typeof RuntimeEventType>;
 
@@ -69,6 +75,10 @@ export type RuntimeDiffArtifact = Artifact & {
     status: RuntimeDiffStatus;
     diffCommand: string;
     notes?: string;
+    workspacePath?: string;
+    sandboxPath?: string;
+    changedFile?: string;
+    appliedAt?: number;
   };
 };
 

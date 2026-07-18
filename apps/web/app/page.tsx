@@ -43,6 +43,19 @@ type TaskSnapshot = {
     reason?: string;
     decision?: string;
   };
+  run?: {
+    id: string;
+    taskId: string;
+    runtimeId: string;
+    workspacePath?: string;
+    sandboxPath?: string;
+    status: string;
+    startedAt: number;
+    completedAt?: number;
+    appliedAt?: number;
+    artifactId?: string;
+    error?: string;
+  };
   projectMemory?: {
     id: string;
     name: string;
@@ -144,6 +157,17 @@ export default function CommandCenterPage() {
     await refreshTask(task.id);
   }
 
+  async function applyApprovedArtifact() {
+    if (!task?.artifactId) {
+      return;
+    }
+
+    await fetch(`/api/artifacts/${task.artifactId}/apply`, {
+      method: "POST",
+    });
+    await refreshTask(task.id);
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -208,6 +232,10 @@ export default function CommandCenterPage() {
               <dd>{task?.artifactId ?? "waiting for runtime output"}</dd>
             </div>
             <div>
+              <dt>Run</dt>
+              <dd>{task?.run ? `${task.run.id} / ${task.run.status}` : "not started"}</dd>
+            </div>
+            <div>
               <dt>Approval</dt>
               <dd>{task?.approval?.decision ?? (task?.approvalId ? "waiting human decision" : "not requested")}</dd>
             </div>
@@ -220,20 +248,55 @@ export default function CommandCenterPage() {
             <h3>Task Timeline</h3>
           </div>
           <ol>
-            {["Understand requirement", "Create task graph", "Run controlled runtime", "Generate patch artifact", "Wait for approval"].map(
-              (step, index) => (
-                <li key={step} className={index < timelineProgress(task?.status) ? "done" : "pending"}>
-                  <span>{index < timelineProgress(task?.status) ? "✓" : "○"}</span>
-                  {step}
-                </li>
-              ),
-            )}
+            {[
+              "Understand requirement",
+              "Create task graph",
+              "Run controlled runtime",
+              "Generate patch artifact",
+              "Approve artifact",
+              "Apply to workspace",
+              "Update memory",
+            ].map((step, index) => (
+              <li key={step} className={index < timelineProgress(task?.status, task?.artifact?.lifecycleState) ? "done" : "pending"}>
+                <span>{index < timelineProgress(task?.status, task?.artifact?.lifecycleState) ? "Done" : "Todo"}</span>
+                {step}
+              </li>
+            ))}
           </ol>
+        </section>
+
+        <section className="panel run-model">
+          <div className="panel-title">
+            <span>04</span>
+            <h3>Run Model</h3>
+          </div>
+          {task?.run ? (
+            <dl>
+              <div>
+                <dt>Run ID</dt>
+                <dd>{task.run.id}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>{task.run.status}</dd>
+              </div>
+              <div>
+                <dt>Sandbox</dt>
+                <dd>{task.run.sandboxPath ?? "waiting for sandbox"}</dd>
+              </div>
+              <div>
+                <dt>Completed</dt>
+                <dd>{task.run.completedAt ? new Date(task.run.completedAt).toLocaleTimeString() : "not completed"}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="muted">Run metadata will appear when the task starts.</p>
+          )}
         </section>
 
         <section className="panel memory">
           <div className="panel-title">
-            <span>04</span>
+            <span>05</span>
             <h3>Project Memory</h3>
           </div>
           {task?.projectMemory ? (
@@ -266,7 +329,7 @@ export default function CommandCenterPage() {
 
         <section className="panel events">
           <div className="panel-title">
-            <span>05</span>
+            <span>06</span>
             <h3>Runtime Events</h3>
           </div>
           <div className="event-list">
@@ -285,7 +348,7 @@ export default function CommandCenterPage() {
 
         <section className="panel artifact">
           <div className="panel-title">
-            <span>06</span>
+            <span>07</span>
             <h3>Artifact / Diff</h3>
           </div>
           <div className="artifact-meta">
@@ -314,6 +377,18 @@ export default function CommandCenterPage() {
               >
                 {task?.approval?.requiresHuman === false ? "Auto Approved" : "Approve"}
               </button>
+              <button
+                className="primary"
+                disabled={
+                  !task?.artifactId ||
+                  task?.artifact?.approvalState !== "approved" ||
+                  task?.artifact?.lifecycleState === "applied" ||
+                  task?.artifact?.lifecycleState === "archived"
+                }
+                onClick={applyApprovedArtifact}
+              >
+                {task?.artifact?.lifecycleState === "applied" ? "Applied" : "Apply"}
+              </button>
             </div>
           </div>
         </section>
@@ -322,15 +397,20 @@ export default function CommandCenterPage() {
   );
 }
 
-function timelineProgress(status?: string): number {
+function timelineProgress(status?: string, lifecycleState?: string): number {
+  if (lifecycleState === "applied" || status === "applied") {
+    return 7;
+  }
+
   switch (status) {
     case "queued":
       return 1;
     case "running":
       return 3;
     case "awaiting_approval":
-      return 5;
+      return 4;
     case "approved":
+      return 5;
     case "rejected":
       return 5;
     case "failed":

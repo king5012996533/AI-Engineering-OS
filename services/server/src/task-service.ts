@@ -4,18 +4,33 @@ import { dirname, resolve } from "node:path";
 import type {
   ApprovalRequest,
   ProjectMemory,
+  RunRecord,
   RuntimeDiffArtifact,
   RuntimeEvent,
   TaskNode,
   ToolCallTask,
 } from "@aieos/protocol";
 import { evaluateApprovalPolicy } from "./approval-policy-service.js";
+import { applyPatchArtifact } from "./apply-engine.js";
 import { createGitSandboxPatch } from "./git-sandbox-service.js";
-import { getProjectMemory, rememberArtifact, rememberDecision, rememberTask } from "./project-memory-service.js";
+import {
+  getProjectMemory,
+  rememberAppliedArtifact,
+  rememberArtifact,
+  rememberDecision,
+  rememberTask,
+} from "./project-memory-service.js";
 import { RuntimeManager } from "./runtime-manager.js";
 import { MockRuntime } from "./runtimes/mock-runtime.js";
 
-export type CommandTaskStatus = "queued" | "running" | "awaiting_approval" | "approved" | "rejected" | "failed";
+export type CommandTaskStatus =
+  | "queued"
+  | "running"
+  | "awaiting_approval"
+  | "approved"
+  | "applied"
+  | "rejected"
+  | "failed";
 
 export type CommandTask = {
   id: string;
@@ -26,6 +41,7 @@ export type CommandTask = {
   runtimeId: string;
   workspacePath?: string;
   projectId?: string;
+  runId?: string;
   artifactId?: string;
   approvalId?: string;
   error?: string;
@@ -35,6 +51,7 @@ export type CommandTaskSnapshot = CommandTask & {
   events: RuntimeEvent[];
   artifact?: RuntimeDiffArtifact;
   approval?: ApprovalRequest;
+  run?: RunRecord;
   projectMemory?: ProjectMemory;
 };
 
@@ -50,6 +67,7 @@ const tasks = new Map<string, CommandTask>();
 const events = new Map<string, RuntimeEvent[]>();
 const artifacts = new Map<string, RuntimeDiffArtifact>();
 const approvals = new Map<string, ApprovalRequest>();
+const runs = new Map<string, RunRecord>();
 const emitter = new EventEmitter();
 const statePath = resolve(process.cwd(), ".aieos", "command-center.json");
 
@@ -58,6 +76,7 @@ type PersistedState = {
   events: Array<[string, RuntimeEvent[]]>;
   artifacts: RuntimeDiffArtifact[];
   approvals: ApprovalRequest[];
+  runs: RunRecord[];
 };
 
 export async function createCommandTask(input: CreateTaskInput): Promise<CommandTask> {
@@ -73,7 +92,17 @@ export async function createCommandTask(input: CreateTaskInput): Promise<Command
     workspacePath: input.workspacePath,
     projectId: getProjectMemory(input.workspacePath).id,
   };
+  const run: RunRecord = {
+    id: id("run"),
+    taskId: task.id,
+    runtimeId: task.runtimeId,
+    workspacePath: input.workspacePath,
+    status: "queued",
+    startedAt: now,
+  };
+  task.runId = run.id;
   tasks.set(task.id, task);
+  runs.set(run.id, run);
   events.set(task.id, []);
   rememberTask(input.workspacePath, task.id, task.goal);
   rememberDecision(input.workspacePath, {
@@ -100,6 +129,7 @@ export function getCommandTask(taskId: string): CommandTaskSnapshot | null {
     events: events.get(task.id) ?? [],
     artifact: task.artifactId ? artifacts.get(task.artifactId) : undefined,
     approval: task.approvalId ? approvals.get(task.approvalId) : undefined,
+    run: task.runId ? runs.get(task.runId) : undefined,
     projectMemory: getProjectMemory(task.workspacePath),
   };
 }
@@ -107,6 +137,91 @@ export function getCommandTask(taskId: string): CommandTaskSnapshot | null {
 export function getArtifact(artifactId: string): RuntimeDiffArtifact | null {
   hydrate();
   return artifacts.get(artifactId) ?? null;
+}
+
+export function applyArtifact(artifactId: string): RuntimeDiffArtifact | null {
+  hydrate();
+  const artifact = artifacts.get(artifactId);
+  if (!artifact) {
+    return null;
+  }
+
+  const task = tasks.get(artifact.taskId);
+  if (!task) {
+    return null;
+  }
+
+  if (artifact.approvalState !== "approved") {
+    throw new Error("Artifact must be approved before apply.");
+  }
+
+  if (artifact.lifecycleState === "applied" || artifact.lifecycleState === "archived") {
+    return artifact;
+  }
+
+  const result = applyPatchArtifact(artifact, task.workspacePath);
+  if (!result.applied) {
+    appendEvent(task.id, {
+      id: id("evt"),
+      runtimeId: task.runtimeId,
+      type: "runtime.turn.failed",
+      timestamp: Date.now(),
+      traceId: traceId(task.id),
+      taskId: task.id,
+      payload: {
+        artifactId,
+        applyError: result.error,
+      },
+    });
+    persist();
+    throw new Error(result.error ?? "Apply failed.");
+  }
+
+  const applied: RuntimeDiffArtifact = {
+    ...artifact,
+    lifecycleState: "applied",
+    data: {
+      ...artifact.data,
+      workspacePath: result.workspacePath,
+      appliedAt: result.appliedAt,
+      notes: result.output ?? artifact.data.notes,
+    },
+  };
+  artifacts.set(applied.id, applied);
+  updateTask(task.id, { status: "applied" });
+
+  const run = task.runId ? runs.get(task.runId) : undefined;
+  if (run) {
+    runs.set(run.id, {
+      ...run,
+      status: "applied",
+      appliedAt: result.appliedAt,
+      completedAt: run.completedAt ?? result.appliedAt,
+      artifactId: artifact.id,
+    });
+  }
+
+  rememberAppliedArtifact(task.workspacePath, artifact.id, task.id);
+  rememberDecision(task.workspacePath, {
+    title: "Artifact Applied",
+    summary: `Applied ${artifact.label} to ${result.workspacePath}`,
+    sourceTaskId: task.id,
+  });
+  appendEvent(task.id, {
+    id: id("evt"),
+    runtimeId: task.runtimeId,
+    type: "artifact.applied",
+    timestamp: result.appliedAt,
+    traceId: traceId(task.id),
+    taskId: task.id,
+    payload: {
+      artifactId,
+      workspacePath: result.workspacePath,
+    },
+  });
+
+  persist();
+  return applied;
 }
 
 export function decideApproval(
@@ -135,6 +250,19 @@ export function decideApproval(
     task.updatedAt = Date.now();
     tasks.set(task.id, task);
     transitionArtifact(approval.artifactId, decision);
+    appendEvent(task.id, {
+      id: id("evt"),
+      runtimeId: task.runtimeId,
+      type: decision === "approved" ? "artifact.approved" : "runtime.partial",
+      timestamp: Date.now(),
+      traceId: traceId(task.id),
+      taskId: task.id,
+      payload: {
+        approvalId,
+        artifactId: approval.artifactId,
+        decision,
+      },
+    });
     appendEvent(task.id, {
       id: id("evt"),
       runtimeId: task.runtimeId,
@@ -178,6 +306,19 @@ async function runTask(commandTask: CommandTask, workspacePath?: string): Promis
   };
 
   updateTask(commandTask.id, { status: "running" });
+  updateRun(commandTask.runId, { status: "running" });
+  appendEvent(commandTask.id, {
+    id: id("evt"),
+    runtimeId: commandTask.runtimeId,
+    type: "run.created",
+    timestamp: Date.now(),
+    traceId: traceId(commandTask.id),
+    taskId: commandTask.id,
+    payload: {
+      runId: commandTask.runId,
+      workspacePath,
+    },
+  });
 
   const result = await manager.executeTurn(
     "mock-runtime",
@@ -203,6 +344,13 @@ async function runTask(commandTask: CommandTask, workspacePath?: string): Promis
     approvalState: policy.requiresHuman ? "pending" : "approved",
   };
   artifacts.set(governedArtifact.id, governedArtifact);
+  updateRun(commandTask.runId, {
+    status: result.status === "completed" ? "completed" : result.status,
+    completedAt: Date.now(),
+    artifactId: governedArtifact.id,
+    error: result.error,
+    sandboxPath: governedArtifact.data.sandboxPath,
+  });
   rememberArtifact(commandTask.workspacePath, governedArtifact.id);
   persist();
 
@@ -239,6 +387,19 @@ async function runTask(commandTask: CommandTask, workspacePath?: string): Promis
     artifactId: governedArtifact.id,
     approvalId: approval.id,
     error: result.error,
+  });
+  appendEvent(commandTask.id, {
+    id: id("evt"),
+    runtimeId: commandTask.runtimeId,
+    type: "run.completed",
+    timestamp: Date.now(),
+    traceId: traceId(commandTask.id),
+    taskId: commandTask.id,
+    payload: {
+      runId: commandTask.runId,
+      artifactId: governedArtifact.id,
+      status: result.status,
+    },
   });
 
   appendEvent(commandTask.id, {
@@ -278,7 +439,7 @@ function buildArtifact(commandTask: CommandTask, fallback: RuntimeDiffArtifact):
         text: "Git sandbox was not available; using runtime fallback artifact.",
       },
     });
-    return fallback;
+    return attachWorkspaceToFallback(fallback, commandTask.workspacePath);
   }
 
   appendEvent(commandTask.id, {
@@ -307,7 +468,23 @@ function buildArtifact(commandTask: CommandTask, fallback: RuntimeDiffArtifact):
       patch: sandbox.diff,
       status: "proposed",
       diffCommand: sandbox.diffCommand,
+      workspacePath: sandbox.workspacePath,
+      sandboxPath: sandbox.sandboxPath,
+      changedFile: sandbox.changedFile,
       notes: `Generated in isolated worktree: ${sandbox.sandboxPath}`,
+    },
+  };
+}
+
+function attachWorkspaceToFallback(
+  fallback: RuntimeDiffArtifact,
+  workspacePath: string,
+): RuntimeDiffArtifact {
+  return {
+    ...fallback,
+    data: {
+      ...fallback.data,
+      workspacePath,
     },
   };
 }
@@ -326,6 +503,21 @@ function transitionArtifact(
     lifecycleState: decision === "approved" ? "approved" : "rejected",
     approvalState: decision,
   });
+}
+
+function updateRun(runId: string | undefined, patch: Partial<RunRecord>): void {
+  if (!runId) {
+    return;
+  }
+  const run = runs.get(runId);
+  if (!run) {
+    return;
+  }
+  runs.set(runId, {
+    ...run,
+    ...patch,
+  });
+  persist();
 }
 
 function updateTask(taskId: string, patch: Partial<CommandTask>): void {
@@ -365,6 +557,7 @@ function hydrate(): void {
   events.clear();
   artifacts.clear();
   approvals.clear();
+  runs.clear();
 
   for (const task of state.tasks ?? []) {
     tasks.set(task.id, task);
@@ -378,6 +571,9 @@ function hydrate(): void {
   for (const approval of state.approvals ?? []) {
     approvals.set(approval.id, approval);
   }
+  for (const run of state.runs ?? []) {
+    runs.set(run.id, run);
+  }
 }
 
 function persist(): void {
@@ -386,6 +582,7 @@ function persist(): void {
     events: [...events.entries()],
     artifacts: [...artifacts.values()],
     approvals: [...approvals.values()],
+    runs: [...runs.values()],
   };
 
   mkdirSync(dirname(statePath), { recursive: true });

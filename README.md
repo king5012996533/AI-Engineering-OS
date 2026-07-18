@@ -72,6 +72,10 @@ The goal is to amplify developers into engineering leaders.
 
 AI Engineering OS is an open-source, protocol-driven operating system for building and managing autonomous AI software engineering teams.
 
+AI Engineering OS is not an AI coding assistant.
+
+It is an operating system for coordinating autonomous software engineering workflows.
+
 It provides:
 
 - Agent orchestration

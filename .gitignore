@@ -4,6 +4,7 @@ dist/
 .next/
 apps/**/.next/
 apps/**/.aieos/
+.aieos/
 .aieos/data.db
 .aieos/memory.json
 .aieos/sandbox/

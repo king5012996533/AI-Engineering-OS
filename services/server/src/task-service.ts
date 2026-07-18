@@ -1,7 +1,16 @@
 import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { ApprovalRequest, RuntimeDiffArtifact, RuntimeEvent, TaskNode, ToolCallTask } from "@aieos/protocol";
+import type {
+  ApprovalRequest,
+  ProjectMemory,
+  RuntimeDiffArtifact,
+  RuntimeEvent,
+  TaskNode,
+  ToolCallTask,
+} from "@aieos/protocol";
+import { createGitSandboxPatch } from "./git-sandbox-service.js";
+import { getProjectMemory, rememberArtifact, rememberDecision, rememberTask } from "./project-memory-service.js";
 import { RuntimeManager } from "./runtime-manager.js";
 import { MockRuntime } from "./runtimes/mock-runtime.js";
 
@@ -14,6 +23,8 @@ export type CommandTask = {
   createdAt: number;
   updatedAt: number;
   runtimeId: string;
+  workspacePath?: string;
+  projectId?: string;
   artifactId?: string;
   approvalId?: string;
   error?: string;
@@ -23,6 +34,7 @@ export type CommandTaskSnapshot = CommandTask & {
   events: RuntimeEvent[];
   artifact?: RuntimeDiffArtifact;
   approval?: ApprovalRequest;
+  projectMemory?: ProjectMemory;
 };
 
 type CreateTaskInput = {
@@ -57,9 +69,17 @@ export async function createCommandTask(input: CreateTaskInput): Promise<Command
     createdAt: now,
     updatedAt: now,
     runtimeId: "mock-runtime",
+    workspacePath: input.workspacePath,
+    projectId: getProjectMemory(input.workspacePath).id,
   };
   tasks.set(task.id, task);
   events.set(task.id, []);
+  rememberTask(input.workspacePath, task.id, task.goal);
+  rememberDecision(input.workspacePath, {
+    title: "Human Intent Captured",
+    summary: task.goal,
+    sourceTaskId: task.id,
+  });
   persist();
 
   void runTask(task, input.workspacePath);
@@ -79,6 +99,7 @@ export function getCommandTask(taskId: string): CommandTaskSnapshot | null {
     events: events.get(task.id) ?? [],
     artifact: task.artifactId ? artifacts.get(task.artifactId) : undefined,
     approval: task.approvalId ? approvals.get(task.approvalId) : undefined,
+    projectMemory: getProjectMemory(task.workspacePath),
   };
 }
 
@@ -171,13 +192,15 @@ async function runTask(commandTask: CommandTask, workspacePath?: string): Promis
     appendEvent(commandTask.id, event);
   }
 
-  artifacts.set(result.artifact.id, result.artifact);
+  const artifact = buildArtifact(commandTask, result.artifact);
+  artifacts.set(artifact.id, artifact);
+  rememberArtifact(commandTask.workspacePath, artifact.id);
   persist();
 
   if (result.status === "failed") {
     updateTask(commandTask.id, {
       status: "failed",
-      artifactId: result.artifact.id,
+      artifactId: artifact.id,
       error: result.error,
     });
     return;
@@ -186,16 +209,16 @@ async function runTask(commandTask: CommandTask, workspacePath?: string): Promis
   const approval: ApprovalRequest = {
     id: id("approval"),
     taskId: commandTask.id,
-    artifactId: result.artifact.id,
+    artifactId: artifact.id,
     summary: "Runtime produced a patch artifact. Human approval is required before apply.",
-    diff: result.artifact.data.patch,
+    diff: artifact.data.patch,
     requestedAt: Date.now(),
   };
   approvals.set(approval.id, approval);
 
   updateTask(commandTask.id, {
     status: "awaiting_approval",
-    artifactId: result.artifact.id,
+    artifactId: artifact.id,
     approvalId: approval.id,
     error: result.error,
   });
@@ -209,10 +232,59 @@ async function runTask(commandTask: CommandTask, workspacePath?: string): Promis
     taskId: commandTask.id,
     payload: {
       approvalId: approval.id,
-      artifactId: result.artifact.id,
+      artifactId: artifact.id,
       status: result.status,
     },
   });
+}
+
+function buildArtifact(commandTask: CommandTask, fallback: RuntimeDiffArtifact): RuntimeDiffArtifact {
+  if (!commandTask.workspacePath) {
+    return fallback;
+  }
+
+  const sandbox = createGitSandboxPatch(commandTask.workspacePath, commandTask.id, commandTask.goal);
+  if (!sandbox?.diff) {
+    appendEvent(commandTask.id, {
+      id: id("evt"),
+      runtimeId: commandTask.runtimeId,
+      type: "runtime.text",
+      timestamp: Date.now(),
+      traceId: traceId(commandTask.id),
+      taskId: commandTask.id,
+      payload: {
+        text: "Git sandbox was not available; using runtime fallback artifact.",
+      },
+    });
+    return fallback;
+  }
+
+  appendEvent(commandTask.id, {
+    id: id("evt"),
+    runtimeId: commandTask.runtimeId,
+    type: "runtime.diff.extracted",
+    timestamp: Date.now(),
+    traceId: traceId(commandTask.id),
+    taskId: commandTask.id,
+    payload: {
+      workspacePath: sandbox.workspacePath,
+      sandboxPath: sandbox.sandboxPath,
+      changedFile: sandbox.changedFile,
+      diffCommand: sandbox.diffCommand,
+    },
+  });
+
+  return {
+    ...fallback,
+    id: id("art"),
+    label: "Git sandbox patch proposal",
+    data: {
+      patch: sandbox.diff,
+      status: "proposed",
+      diffCommand: sandbox.diffCommand,
+      notes: `Generated in isolated worktree: ${sandbox.sandboxPath}`,
+    },
+  };
 }
 
 function updateTask(taskId: string, patch: Partial<CommandTask>): void {

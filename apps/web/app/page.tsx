@@ -14,6 +14,8 @@ type TaskSnapshot = {
   goal: string;
   status: string;
   runtimeId: string;
+  workspacePath?: string;
+  projectId?: string;
   artifactId?: string;
   approvalId?: string;
   error?: string;
@@ -32,6 +34,22 @@ type TaskSnapshot = {
     id: string;
     summary: string;
     decision?: string;
+  };
+  projectMemory?: {
+    id: string;
+    name: string;
+    workspacePath?: string;
+    goals: string[];
+    decisions: Array<{
+      id: string;
+      title: string;
+      summary: string;
+      sourceTaskId?: string;
+      createdAt: number;
+    }>;
+    artifactIds: string[];
+    taskIds: string[];
+    history: string[];
   };
 };
 
@@ -205,9 +223,42 @@ export default function CommandCenterPage() {
           </ol>
         </section>
 
-        <section className="panel events">
+        <section className="panel memory">
           <div className="panel-title">
             <span>04</span>
+            <h3>Project Memory</h3>
+          </div>
+          {task?.projectMemory ? (
+            <div className="memory-grid">
+              <div>
+                <p className="memory-label">Project</p>
+                <strong>{task.projectMemory.name}</strong>
+                <small>{task.projectMemory.workspacePath ?? "Default memory"}</small>
+              </div>
+              <div>
+                <p className="memory-label">Goals</p>
+                <strong>{task.projectMemory.goals.length}</strong>
+                <small>{task.projectMemory.goals[0] ?? "No goals stored yet"}</small>
+              </div>
+              <div>
+                <p className="memory-label">Decisions</p>
+                <strong>{task.projectMemory.decisions.length}</strong>
+                <small>{task.projectMemory.decisions[0]?.summary ?? "No decisions stored yet"}</small>
+              </div>
+              <div>
+                <p className="memory-label">Artifacts</p>
+                <strong>{task.projectMemory.artifactIds.length}</strong>
+                <small>{task.projectMemory.artifactIds[0] ?? "No artifacts stored yet"}</small>
+              </div>
+            </div>
+          ) : (
+            <p className="muted">Project memory will appear after the first task is created.</p>
+          )}
+        </section>
+
+        <section className="panel events">
+          <div className="panel-title">
+            <span>05</span>
             <h3>Runtime Events</h3>
           </div>
           <div className="event-list">
@@ -226,7 +277,7 @@ export default function CommandCenterPage() {
 
         <section className="panel artifact">
           <div className="panel-title">
-            <span>05</span>
+            <span>06</span>
             <h3>Artifact / Diff</h3>
           </div>
           <pre>{task?.artifact?.data.patch || "Patch artifact will appear here."}</pre>

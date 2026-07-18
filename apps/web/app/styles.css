@@ -231,6 +231,44 @@ dd {
   min-height: 260px;
 }
 
+.memory {
+  min-height: 260px;
+}
+
+.memory-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.memory-grid div {
+  background: #f7f2ea;
+  border: 1px solid #eee4d7;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-height: 118px;
+  padding: 14px;
+}
+
+.memory-grid strong {
+  font-size: 22px;
+}
+
+.memory-grid small {
+  color: var(--muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.memory-label {
+  color: var(--accent-2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .event-list {
   display: grid;
   gap: 10px;
@@ -306,5 +344,9 @@ pre {
   .approval-bar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .memory-grid {
+    grid-template-columns: 1fr;
   }
 }

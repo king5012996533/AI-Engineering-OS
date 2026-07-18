@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type {
   ApprovalRequest,
+  ApplyAuditRecord,
   ProjectMemory,
+  RuntimeCapabilities,
   RunRecord,
   RuntimeDiffArtifact,
   RuntimeEvent,
@@ -52,6 +54,7 @@ export type CommandTaskSnapshot = CommandTask & {
   artifact?: RuntimeDiffArtifact;
   approval?: ApprovalRequest;
   run?: RunRecord;
+  applyAudit?: ApplyAuditRecord;
   projectMemory?: ProjectMemory;
 };
 
@@ -68,6 +71,7 @@ const events = new Map<string, RuntimeEvent[]>();
 const artifacts = new Map<string, RuntimeDiffArtifact>();
 const approvals = new Map<string, ApprovalRequest>();
 const runs = new Map<string, RunRecord>();
+const applyAudits = new Map<string, ApplyAuditRecord>();
 const emitter = new EventEmitter();
 const statePath = resolve(process.cwd(), ".aieos", "command-center.json");
 
@@ -77,7 +81,12 @@ type PersistedState = {
   artifacts: RuntimeDiffArtifact[];
   approvals: ApprovalRequest[];
   runs: RunRecord[];
+  applyAudits: ApplyAuditRecord[];
 };
+
+export function listRuntimeProviders(): RuntimeCapabilities[] {
+  return manager.listCapabilities();
+}
 
 export async function createCommandTask(input: CreateTaskInput): Promise<CommandTask> {
   hydrate();
@@ -130,6 +139,7 @@ export function getCommandTask(taskId: string): CommandTaskSnapshot | null {
     artifact: task.artifactId ? artifacts.get(task.artifactId) : undefined,
     approval: task.approvalId ? approvals.get(task.approvalId) : undefined,
     run: task.runId ? runs.get(task.runId) : undefined,
+    applyAudit: task.artifactId ? latestApplyAudit(task.artifactId) : undefined,
     projectMemory: getProjectMemory(task.workspacePath),
   };
 }
@@ -160,6 +170,23 @@ export function applyArtifact(artifactId: string): RuntimeDiffArtifact | null {
   }
 
   const result = applyPatchArtifact(artifact, task.workspacePath);
+  const approval = task.approvalId ? approvals.get(task.approvalId) : undefined;
+  const audit: ApplyAuditRecord = {
+    id: id("apply"),
+    taskId: task.id,
+    artifactId: artifact.id,
+    approvalId: approval?.id,
+    approvedBy: approval?.decidedBy,
+    appliedBy: "apply-engine",
+    workspacePath: result.workspacePath,
+    beforeCommit: result.beforeCommit,
+    afterCommit: result.afterCommit,
+    status: result.applied ? "applied" : "failed",
+    appliedAt: result.appliedAt,
+    error: result.error,
+  };
+  applyAudits.set(audit.id, audit);
+
   if (!result.applied) {
     appendEvent(task.id, {
       id: id("evt"),
@@ -184,6 +211,8 @@ export function applyArtifact(artifactId: string): RuntimeDiffArtifact | null {
       ...artifact.data,
       workspacePath: result.workspacePath,
       appliedAt: result.appliedAt,
+      beforeCommit: result.beforeCommit,
+      afterCommit: result.afterCommit,
       notes: result.output ?? artifact.data.notes,
     },
   };
@@ -217,6 +246,9 @@ export function applyArtifact(artifactId: string): RuntimeDiffArtifact | null {
     payload: {
       artifactId,
       workspacePath: result.workspacePath,
+      applyAuditId: audit.id,
+      beforeCommit: result.beforeCommit,
+      afterCommit: result.afterCommit,
     },
   });
 
@@ -558,6 +590,7 @@ function hydrate(): void {
   artifacts.clear();
   approvals.clear();
   runs.clear();
+  applyAudits.clear();
 
   for (const task of state.tasks ?? []) {
     tasks.set(task.id, task);
@@ -574,6 +607,9 @@ function hydrate(): void {
   for (const run of state.runs ?? []) {
     runs.set(run.id, run);
   }
+  for (const applyAudit of state.applyAudits ?? []) {
+    applyAudits.set(applyAudit.id, applyAudit);
+  }
 }
 
 function persist(): void {
@@ -583,6 +619,7 @@ function persist(): void {
     artifacts: [...artifacts.values()],
     approvals: [...approvals.values()],
     runs: [...runs.values()],
+    applyAudits: [...applyAudits.values()],
   };
 
   mkdirSync(dirname(statePath), { recursive: true });
@@ -608,4 +645,10 @@ function traceId(taskId: string): string {
 
 function taskEventName(taskId: string): string {
   return `task:${taskId}`;
+}
+
+function latestApplyAudit(artifactId: string): ApplyAuditRecord | undefined {
+  return [...applyAudits.values()]
+    .filter((audit) => audit.artifactId === artifactId)
+    .sort((a, b) => b.appliedAt - a.appliedAt)[0];
 }

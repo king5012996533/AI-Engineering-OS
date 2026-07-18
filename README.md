@@ -301,6 +301,16 @@ Compatible with:
 - Claude Agents
 - Custom runtimes
 
+Runtime providers are replaceable execution engines. Every provider must declare capabilities before it can execute tasks:
+
+- tool calling
+- streaming events
+- diff extraction
+- sandbox requirements
+- partial diff recovery
+
+Providers produce events and artifacts. They do not own approval, apply, memory, or policy logic.
+
 ---
 
 # Project Structure

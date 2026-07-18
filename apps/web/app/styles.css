@@ -202,6 +202,28 @@ button:disabled {
   margin: 0;
 }
 
+.runtime-providers {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.runtime-providers div {
+  background: #f7f2ea;
+  border: 1px solid #eee4d7;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.runtime-providers small,
+.runtime-providers p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 dt {
   color: var(--muted);
   font-size: 13px;
@@ -319,6 +341,23 @@ dd {
   padding: 7px 10px;
 }
 
+.apply-audit {
+  background: #f7f2ea;
+  border: 1px solid #eee4d7;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.apply-audit span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 pre {
   background: var(--code);
   border-radius: 8px;
@@ -371,6 +410,10 @@ pre {
   }
 
   .memory-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .apply-audit {
     grid-template-columns: 1fr;
   }
 }

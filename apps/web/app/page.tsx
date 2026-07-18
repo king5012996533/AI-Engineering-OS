@@ -56,6 +56,20 @@ type TaskSnapshot = {
     artifactId?: string;
     error?: string;
   };
+  applyAudit?: {
+    id: string;
+    taskId: string;
+    artifactId: string;
+    approvalId?: string;
+    approvedBy?: string;
+    appliedBy: string;
+    workspacePath: string;
+    beforeCommit?: string;
+    afterCommit?: string;
+    status: string;
+    appliedAt: number;
+    error?: string;
+  };
   projectMemory?: {
     id: string;
     name: string;
@@ -74,6 +88,14 @@ type TaskSnapshot = {
   };
 };
 
+type RuntimeProvider = {
+  id: string;
+  kind: string;
+  displayName: string;
+  capabilities: string[];
+  description?: string;
+};
+
 const suggestions = [
   "Add password login to this project",
   "Review the architecture and propose the first implementation task",
@@ -86,7 +108,15 @@ export default function CommandCenterPage() {
   const [taskId, setTaskId] = useState<string | null>(null);
   const [task, setTask] = useState<TaskSnapshot | null>(null);
   const [events, setEvents] = useState<RuntimeEvent[]>([]);
+  const [runtimeProviders, setRuntimeProviders] = useState<RuntimeProvider[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/runtimes")
+      .then((response) => (response.ok ? response.json() : []))
+      .then((providers: RuntimeProvider[]) => setRuntimeProviders(providers))
+      .catch(() => setRuntimeProviders([]));
+  }, []);
 
   useEffect(() => {
     if (!taskId) {
@@ -292,6 +322,15 @@ export default function CommandCenterPage() {
           ) : (
             <p className="muted">Run metadata will appear when the task starts.</p>
           )}
+          <div className="runtime-providers">
+            {runtimeProviders.map((provider) => (
+              <div key={provider.id}>
+                <strong>{provider.displayName}</strong>
+                <small>{provider.description ?? provider.kind}</small>
+                <p>{provider.capabilities.join(" / ")}</p>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="panel memory">
@@ -356,7 +395,16 @@ export default function CommandCenterPage() {
             <span>Approval: {task?.artifact?.approvalState ?? "waiting"}</span>
             <span>Risk: {task?.artifact?.risk ?? "unknown"}</span>
             <span>Source: {task?.artifact?.source ?? "runtime"}</span>
+            <span>Apply Audit: {task?.applyAudit?.id ?? "not applied"}</span>
           </div>
+          {task?.applyAudit ? (
+            <div className="apply-audit">
+              <span>Applied by: {task.applyAudit.appliedBy}</span>
+              <span>Approved by: {task.applyAudit.approvedBy ?? "policy"}</span>
+              <span>Before: {shortHash(task.applyAudit.beforeCommit)}</span>
+              <span>After: {shortHash(task.applyAudit.afterCommit)}</span>
+            </div>
+          ) : null}
           <pre>{task?.artifact?.data.patch || "Patch artifact will appear here."}</pre>
           <div className="approval-bar">
             <p>
@@ -395,6 +443,10 @@ export default function CommandCenterPage() {
       </section>
     </main>
   );
+}
+
+function shortHash(hash?: string): string {
+  return hash ? hash.slice(0, 8) : "none";
 }
 
 function timelineProgress(status?: string, lifecycleState?: string): number {

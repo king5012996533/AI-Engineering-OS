@@ -1,6 +1,7 @@
 import type {
   AgentRuntime,
   RuntimeContext,
+  RuntimeCapabilities,
   RuntimeDiffArtifact,
   RuntimeEvent,
   RuntimeKind,
@@ -17,6 +18,16 @@ export class MockRuntime implements AgentRuntime {
   private context: RuntimeContext | null = null;
   private task: ToolCallTask | null = null;
   private patch = "";
+
+  capabilities(): RuntimeCapabilities {
+    return {
+      id: this.id,
+      kind: this.kind,
+      displayName: "Mock Runtime",
+      capabilities: ["tool_calling", "streaming_events", "diff_extraction", "sandbox_required"],
+      description: "Deterministic runtime used to validate the OS workflow before external providers are attached.",
+    };
+  }
 
   async initialize(context: RuntimeContext): Promise<void> {
     this.context = context;

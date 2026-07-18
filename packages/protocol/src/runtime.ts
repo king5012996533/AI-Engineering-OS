@@ -8,6 +8,24 @@ export type RuntimeId = z.infer<typeof RuntimeId>;
 export const RuntimeKind = z.enum(["mock", "grok-build", "openai-compatible", "anthropic", "local"]);
 export type RuntimeKind = z.infer<typeof RuntimeKind>;
 
+export const RuntimeCapability = z.enum([
+  "tool_calling",
+  "streaming_events",
+  "diff_extraction",
+  "sandbox_required",
+  "partial_diff_recovery",
+]);
+export type RuntimeCapability = z.infer<typeof RuntimeCapability>;
+
+export const RuntimeCapabilities = z.object({
+  id: RuntimeId,
+  kind: RuntimeKind,
+  displayName: z.string(),
+  capabilities: z.array(RuntimeCapability),
+  description: z.string().optional(),
+});
+export type RuntimeCapabilities = z.infer<typeof RuntimeCapabilities>;
+
 export const SandboxProfile = z.enum(["off", "workspace", "read-only", "strict"]);
 export type SandboxProfile = z.infer<typeof SandboxProfile>;
 
@@ -79,6 +97,8 @@ export type RuntimeDiffArtifact = Artifact & {
     sandboxPath?: string;
     changedFile?: string;
     appliedAt?: number;
+    beforeCommit?: string;
+    afterCommit?: string;
   };
 };
 
@@ -89,6 +109,7 @@ export type RuntimeDiffApprovalState = "not_required" | "pending" | "approved" |
 export type AgentRuntime = {
   id: RuntimeId;
   kind: RuntimeKind;
+  capabilities(): RuntimeCapabilities;
   initialize(context: RuntimeContext): Promise<void>;
   executeTurn(task: ToolCallTask): AsyncIterable<RuntimeEvent>;
   extractDiff(): Promise<RuntimeDiffArtifact>;

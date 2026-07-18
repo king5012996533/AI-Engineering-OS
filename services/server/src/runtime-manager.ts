@@ -1,6 +1,7 @@
 import type {
   AgentRuntime,
   RuntimeContext,
+  RuntimeCapabilities,
   RuntimeDiffArtifact,
   RuntimeEvent,
   ToolCallTask,
@@ -41,6 +42,10 @@ export class RuntimeManager {
 
   list(): AgentRuntime[] {
     return [...this.runtimes.values()];
+  }
+
+  listCapabilities(): RuntimeCapabilities[] {
+    return this.list().map((runtime) => runtime.capabilities());
   }
 
   async executeTurn(

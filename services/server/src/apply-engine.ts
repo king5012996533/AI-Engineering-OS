@@ -8,6 +8,8 @@ export type ApplyResult = {
   applied: boolean;
   workspacePath: string;
   appliedAt: number;
+  beforeCommit?: string;
+  afterCommit?: string;
   output?: string;
   error?: string;
 };
@@ -29,6 +31,7 @@ export function applyPatchArtifact(artifact: RuntimeDiffArtifact, workspacePath?
   if (!repoRoot) {
     return { applied: false, workspacePath: targetWorkspace, appliedAt, error: "Workspace is not a git repository." };
   }
+  const beforeCommit = tryGit(repoRoot, ["rev-parse", "HEAD"])?.trim();
 
   const tempDir = mkdtempSync(join(tmpdir(), "aieos-patch-"));
   const patchPath = join(tempDir, "artifact.patch");
@@ -48,6 +51,8 @@ export function applyPatchArtifact(artifact: RuntimeDiffArtifact, workspacePath?
       applied: true,
       workspacePath: repoRoot,
       appliedAt,
+      beforeCommit,
+      afterCommit: tryGit(repoRoot, ["rev-parse", "HEAD"])?.trim(),
       output: output.trim() || "Patch applied.",
     };
   } catch (error) {
@@ -55,6 +60,8 @@ export function applyPatchArtifact(artifact: RuntimeDiffArtifact, workspacePath?
       applied: false,
       workspacePath: repoRoot,
       appliedAt,
+      beforeCommit,
+      afterCommit: tryGit(repoRoot, ["rev-parse", "HEAD"])?.trim(),
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {

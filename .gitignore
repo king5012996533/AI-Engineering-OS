@@ -1,9 +1,13 @@
 node_modules/
 dist/
 .turbo/
+.next/
+apps/**/.next/
+apps/**/.aieos/
 .aieos/data.db
 .aieos/memory.json
 .aieos/sandbox/
 *.log
+*.tsbuildinfo
 .env
 .env.local

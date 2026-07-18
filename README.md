@@ -97,9 +97,27 @@ Instead of treating AI as a chatbot, AI Engineering OS treats AI as a software e
 
 # Architecture
 
-<p align="center">
-<img src="./docs/assets/architecture.png" alt="AI Engineering OS Architecture" width="800">
-</p>
+```
+                    AI Engineering OS
+
+
+                   Command Center
+                         |
+                    Orchestrator
+                         |
+          --------------------------------
+          |              |              |
+      Control Plane   Runtime Plane  Execution Plane
+          |              |              |
+       ┌──────┐    ┌──────────┐    ┌─────────┐
+       │ Task │    │ Provider │    │ Sandbox │
+       │Policy│    │Interface │    │         │
+       │Audit │    └──────────┘    │  Apply  │
+       │Memory│         |          │  Engine │
+       └──────┘    ┌────┼────┐    └─────────┘
+                   │    │    │
+                 Mock OpenAI Grok
+```
 
 ---
 
